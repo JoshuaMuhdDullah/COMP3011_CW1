@@ -1,3 +1,4 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -26,75 +27,48 @@
         <div class="d-flex align-items-center">
             <span class="text-muted me-3">Logged in as {{ user.username }}</span>
             <a href="{% url 'movie_search' %}" class="btn btn-sm btn-outline-light me-2">Browse</a>
-            <a href="{% url 'logout' %}" class="btn btn-sm btn-danger">Logout</a>
+            <button onclick="handleLogout()" class="btn btn-sm btn-danger">Logout</button>
         </div>
     </div>
 </nav>
 
 <main class="container py-5">
-    <header class="mb-5">
-        <h1 class="display-5 fw-bold">My <span class="text-danger">Watchlist</span></h1>
-        <p class="text-muted">{{ movies|length }} movies saved for later.</p>
+    <header class="mb-5 d-flex justify-content-between align-items-end">
+        <div>
+            <h1 class="display-5 fw-bold text-white">My <span class="text-danger">Watchlist</span></h1>
+            <p class="text-muted fs-5" id="watchlist-count">Loading movies...</p>
+        </div>
+        <div class="pb-2">
+            <a href="{% url 'export_watchlist_json' %}" class="btn btn-sm btn-outline-light opacity-75">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-download me-2" viewBox="0 0 16 16">
+                    <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
+                    <path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z"/>
+                </svg>
+                Export JSON
+            </a>
+        </div>
     </header>
 
-    <div class="row row-cols-2 row-cols-md-3 row-cols-lg-5 g-4">
-        {% for movie in movies %}
-        <div class="col">
-            <div class="card shadow-sm">
-                <img src="{{ movie.poster_link }}" class="card-img-top" alt="{{ movie.series_title }}" 
-                     onclick="location.href='{% url 'movie_detail' movie.id %}'"
-                     onerror="this.src='https://via.placeholder.com/300x450?text=No+Poster'">
-                
-                <div class="card-body">
-                    <h5 class="card-title text-truncate" style="font-size: 0.9rem;color: #b3b3b3">{{ movie.series_title }}</h5>
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <small class="text-warning">⭐ {{ movie.imdb_rating }}</small>
-                        <small class="text-muted">{{ movie.released_year }}</small>
-                    </div>
-                    <a href="{% url 'toggle_bookmark' movie.id %}" class="btn btn-sm btn-outline-secondary w-100">
-                        Remove
-                    </a>
-                </div>
-            </div>
-        </div>
-        {% empty %}
+    <div class="row row-cols-2 row-cols-md-3 row-cols-lg-5 g-4" id="watchlist-grid">
         <div class="col-12 text-center py-5">
-            <div class="opacity-50 mb-4">
-                <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" fill="currentColor" class="bi bi-bookmark-plus" viewBox="0 0 16 16">
-                    <path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5V2zm2-1a1 1 0 0 0-1 1v12.566l4.723-2.482a.5.5 0 0 1 .554 0L13 14.566V2a1 1 0 0 0-1-1H4z"/>
-                    <path d="M8 4a.5.5 0 0 1 .5.5V6H10a.5.5 0 0 1 0 1H8.5v1.5a.5.5 0 0 1-1 0V7H6a.5.5 0 0 1 0-1h1.5V4.5A.5.5 0 0 1 8 4z"/>
-                </svg>
-            </div>
-            <h4 class="text-muted">Your watchlist is empty</h4>
-            <a href="{% url 'movie_search' %}" class="btn btn-danger mt-3 px-4">Find something to watch</a>
+            <div class="spinner-border text-danger" role="status"></div>
+            <p class="mt-2 text-muted">Fetching your movies...</p>
         </div>
-        {% endfor %}
     </div>
-    {% if recommendations %}
-    <hr class="border-secondary my-5">
 
+    <hr class="border-secondary my-5">
+    
     <header class="mb-4">
         <h2 class="fw-bold">Suggested <span class="text-danger">For You</span></h2>
-        <p class="text-muted small">Based on the movies in your watchlist</p>
+        <p class="text-muted small">Based on your taste profile</p>
     </header>
 
-    <div class="row row-cols-2 row-cols-md-5 g-4">
-        {% for rec in recommendations %}
-        <div class="col">
-            <div class="card bg-dark border-0 shadow-lg h-100 opacity-75 hover-opacity-100" style="transition: 0.3s;">
-                <img src="{{ rec.poster_link }}" class="card-img-top" 
-                    onclick="location.href='{% url 'movie_detail' rec.id %}'" style="cursor:pointer;">
-                <div class="card-body p-2">
-                    <h6 class="card-title text-truncate small mb-1">{{ rec.series_title }}</h6>
-                    <a href="{% url 'toggle_bookmark' rec.id %}" class="btn btn-sm btn-danger w-100" style="font-size: 0.7rem;">+ Add</a>
-                </div>
-            </div>
+    <div class="row row-cols-2 row-cols-md-5 g-4" id="suggestions-grid">
         </div>
-        {% endfor %}
-    </div>
-    {% endif %}
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="{% static 'recommender/js/watchlist.js' %}"></script>
+<script src="{% static 'recommender/js/auth.js' %}"></script>
 </body>
 </html>

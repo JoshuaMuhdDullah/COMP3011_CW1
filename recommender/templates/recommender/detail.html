@@ -1,109 +1,88 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MovieRec | Details</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body { background-color: #141414; color: white; }
-        .hero-section { background: linear-gradient(to bottom, rgba(20,20,20,0), #141414), url('{{ movie.poster_link }}'); background-size: cover; padding-top: 100px; }
-        .movie-poster { border-radius: 8px; box-shadow: 0 0 20px rgba(0,0,0,0.5); width: 100%; max-width: 300px; }
+        .movie-poster { border-radius: 8px; box-shadow: 0 0 20px rgba(0,0,0,0.5); width: 100%; max-width: 300px; opacity: 0; transition: opacity 0.5s; }
         .rec-card img { height: 220px; object-fit: cover; border-radius: 4px; }
-        .rec-card { background: none; border: none; transition: 0.2s; }
+        .rec-card { background: none; border: none; transition: 0.2s; cursor: pointer; }
         .rec-card:hover { transform: translateY(-5px); }
         .badge { background-color: #333; }
         .text-muted { color: #b3b3b3 !important; }
+        #loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #141414; z-index: 9999; display: flex; align-items: center; justify-content: center; }
+        
+        /* Added for better comment UI */
+        .comment-card { border-left: 3px solid #e50914 !important; }
+        .extra-small { font-size: 0.75rem; }
     </style>
 </head>
 <body>
 
-<div class="container py-5">
+<div id="loading-overlay"><div class="spinner-border text-danger" role="status"></div></div>
+
+<div class="container py-5" id="detail-container" 
+     data-movie-id="{{ movie_id }}" 
+     data-user-authenticated="{{ user.is_authenticated|yesno:'true,false' }}">
+    
     <a href="{% url 'movie_search' %}" class="btn btn-outline-light mb-4">← Back to Search</a>
     
     <div class="row align-items-center">
         <div class="col-md-4 text-center">
-            <img src="{{ movie.poster_link }}" class="movie-poster mb-4">
+            <img id="movie-poster" src="" class="movie-poster mb-4">
         </div>
         <div class="col-md-8">
-            <h1 class="display-4 fw-bold">{{ movie.series_title }} <span class="text-muted fw-light">({{ movie.released_year }})</span></h1>
-            {% if user.is_authenticated %}
-                <a href="{% url 'toggle_bookmark' movie.id %}" 
-                class="btn {% if user in movie.watchlisted_by.all %}btn-secondary{% else %}btn-danger{% endif %} shadow-sm">
-                    {% if user in movie.watchlisted_by.all %}
-                        ✓ In Watchlist
-                    {% else %}
-                        + Add to Watchlist
-                    {% endif %}
-                </a>
-            {% else %}
-                <a href="{% url 'login' %}" class="btn btn-outline-light btn-sm">Login to save movies</a>
-            {% endif %}
+            <h1 class="display-4 fw-bold"><span id="movie-title"></span> <span id="movie-year" class="text-muted fw-light"></span></h1>
+            
+            <div id="auth-actions" class="mb-3">
+                </div>
+
             <div class="mb-3">
-                <span class="badge rounded-pill p-2 px-3">⭐ {{ movie.imdb_rating }} IMDb</span>
-                <span class="ms-2 text-muted">{{ movie.runtime }}</span>
-                <span class="ms-2 text-muted">| {{ movie.genre }}</span>
+                <span class="badge rounded-pill p-2 px-3" id="movie-rating"></span>
+                <span class="ms-2 text-muted" id="movie-runtime"></span>
+                <span class="ms-2 text-muted">| <span id="movie-genre"></span></span>
             </div>
-            <p class="lead">{{ movie.overview }}</p>
+            <p class="lead" id="movie-overview"></p>
             <hr class="border-secondary">
-            <p><strong>Director:</strong> {{ movie.director }}</p>
-            <p><strong>Cast:</strong> {{ movie.star1 }}, {{ movie.star2 }}, {{ movie.star3 }}, {{ movie.star4 }}</p>
+            <p><strong>Director:</strong> <span id="movie-director"></span></p>
+            <p><strong>Cast:</strong> <span id="movie-cast"></span></p>
         </div>
     </div>
 
     <div class="mt-5">
         <h3 class="mb-4">More Like This</h3>
-        <div class="row row-cols-2 row-cols-md-5 g-3">
-            {% for rec in recommendations %}
-            <div class="col text-center">
-                <a href="{% url 'movie_detail' rec.id %}" class="text-decoration-none text-white">
-                    <div class="card rec-card">
-                        <img src="{{ rec.poster_link }}" class="card-img-top">
-                        <div class="card-body p-2">
-                            <p class="text-muted">{{ rec.series_title }}</p>
-                        </div>
-                    </div>
-                </a>
+        <div id="recommendations-grid" class="row row-cols-2 row-cols-md-5 g-3">
             </div>
-            {% endfor %}
-        </div>
     </div>
+
     <hr class="border-secondary my-5">
 
     <div class="row">
         <div class="col-md-8">
             <h3 class="mb-4">User Discussion</h3>
 
-            {% if user.is_authenticated %}
-            <form action="{% url 'add_comment' movie.id %}" method="POST" class="mb-4">
-                {% csrf_token %}
-                <textarea name="content" class="form-control bg-dark text-white border-secondary mb-2" rows="3" placeholder="What did you think of this movie?" required></textarea>
-                <button type="submit" class="btn btn-danger btn-sm">Post Comment</button>
-            </form>
-            {% else %}
-            <p class="text-muted small">Please <a href="{% url 'login' %}" class="text-white">login</a> to join the discussion.</p>
-            {% endif %}
-
-            <div class="comment-list">
-                {% for comment in comments %}
-                <div class="p-3 mb-3 rounded" style="background: #1a1a1a;">
-                    <div class="d-flex justify-content-between">
-                        <strong class="text-danger">{{ comment.user.username }}</strong>
-                        <small class="text-muted">{{ comment.created_at|timesince }} ago</small>
-                    </div>
-                    <p class="mt-2 mb-0">{{ comment.content }}</p>
-                    
-                    {% if comment.user == request.user %}
-                    <div class="mt-2">
-                        <a href="{% url 'delete_comment' comment.id %}" class="text-muted small text-decoration-none" onclick="return confirm('Delete this comment?')">Delete</a>
-                    </div>
-                    {% endif %}
+            <div id="comment-form-container" class="mb-4">
                 </div>
-                {% empty %}
-                <p class="text-muted italic">No comments yet. Be the first to review!</p>
-                {% endfor %}
-            </div>
+
+            <div id="comment-list">
+                </div>
         </div>
     </div>
 </div>
+
+<form id="csrf-form">
+    {% csrf_token %}
+</form>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="{% static 'recommender/js/auth.js' %}"></script>
+<script src="{% static 'recommender/js/detail.js' %}"></script>
+<script src="{% static 'recommender/js/watchlist.js' %}"></script>
+<script src="{% static 'recommender/js/comment.js' %}"></script>
 
 </body>
 </html>
