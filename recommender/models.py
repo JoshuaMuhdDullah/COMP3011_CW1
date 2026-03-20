@@ -1,4 +1,5 @@
 from django.db import models
+from django.contrib.auth.models import User
 
 # Create your models here.
 class Movie(models.Model):
@@ -20,5 +21,16 @@ class Movie(models.Model):
     # Gross is stored as a string to preserve the commas/formatting from your CSV
     gross = models.CharField(max_length=100, null=True, blank=True)
 
+    watchlisted_by = models.ManyToManyField(User, related_name="watchlist", blank=True)
+
     def __str__(self):
         return self.series_title
+    
+class Comment(models.Model):
+    movie = models.ForeignKey(Movie, on_delete=models.CASCADE, related_name='comments')
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    content = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.user.username} on {self.movie.series_title}"

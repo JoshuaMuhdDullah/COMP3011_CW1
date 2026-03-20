@@ -1,11 +1,41 @@
-from django.shortcuts import render
-from .models import Movie
-from django.shortcuts import render
+from django.shortcuts import render, redirect
+from django.http import JsonResponse
+from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
+from django.contrib.auth import login, logout, authenticate
+from django.shortcuts import get_object_or_404, redirect
+from django.contrib.auth.decorators import login_required
+from .models import Movie, Comment
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import linear_kernel
 
 # Create your views here.
+def register_view(request):
+    if request.method == "POST":
+        form = UserCreationForm(request.POST)
+        if form.is_valid():
+            user = form.save()
+            login(request, user) # Automatically log them in after registering
+            return redirect('movie_search')
+    else:
+        form = UserCreationForm()
+    return render(request, 'recommender/register.html', {'form': form})
+
+def login_view(request):
+    if request.method == "POST":
+        form = AuthenticationForm(data=request.POST)
+        if form.is_valid():
+            user = form.get_user()
+            login(request, user)
+            return redirect('movie_search')
+    else:
+        form = AuthenticationForm()
+    return render(request, 'recommender/login.html', {'form': form})
+
+def logout_view(request):
+    logout(request)
+    return redirect('movie_search')
+
 def get_similarity_matrix():
     # Fetch data including director and rating
     all_movies = Movie.objects.all().values('id', 'overview', 'director', 'imdb_rating')
@@ -76,6 +106,7 @@ def movie_search(request):
 def movie_detail(request, movie_id):
     # 1. Initialize variables at the top to prevent "Unbound" errors
     movie = Movie.objects.get(id=movie_id)
+    comments = movie.comments.all().order_by('-created_at')
     recommendations = []
     recommended_ids = [] # Default to empty
 
@@ -102,16 +133,75 @@ def movie_detail(request, movie_id):
             # If the movie isn't in our DF, recommendations stays empty
             pass
 
-    # 3. Apply High-Res Fix to the main movie
     if movie.poster_link and "_V1_" in movie.poster_link:
         movie.poster_link = movie.poster_link.split('_V1_')[0] + "_V1_.jpg"
 
-    # 4. Apply High-Res Fix to recommendations (if any exist)
     for rec in recommendations:
         if rec.poster_link and "_V1_" in rec.poster_link:
             rec.poster_link = rec.poster_link.split('_V1_')[0] + "_V1_.jpg"
 
     return render(request, 'recommender/detail.html', {
         'movie': movie, 
-        'recommendations': recommendations
+        'recommendations': recommendations,
+        'comments': comments
     })
+
+def movie_search_ajax(request):
+    query = request.GET.get('q', '')
+    if len(query) > 1:  # Only search if user typed 2+ characters
+        movies = Movie.objects.filter(series_title__icontains=query)[:10]
+        results = []
+        for m in movies:
+            poster = m.poster_link
+            if poster and "_V1_" in poster:
+                poster = poster.split('_V1_')[0] + "_V1_.jpg"
+                
+            results.append({
+                'id': m.id,
+                'title': m.series_title,
+                'poster': poster,
+                'year': m.released_year,
+                'rating': m.imdb_rating
+            })
+        return JsonResponse({'status': 'success', 'data': results})
+    return JsonResponse({'status': 'empty', 'data': []})
+
+@login_required
+def toggle_bookmark(request, movie_id):
+    movie = get_object_or_404(Movie, id=movie_id)
+    
+    if request.user in movie.watchlisted_by.all():
+        movie.watchlisted_by.remove(request.user)
+    else:
+        movie.watchlisted_by.add(request.user)
+    
+    # Returns the user to the same page they were on
+    return redirect(request.META.get('HTTP_REFERER', 'movie_search'))
+
+@login_required
+def watchlist_view(request):
+    # Fetch only the movies this user has added
+    my_movies = request.user.watchlist.all()
+    
+    # Apply our High-Res fix so the watchlist looks great
+    for m in my_movies:
+        if m.poster_link and "_V1_" in m.poster_link:
+            m.poster_link = m.poster_link.split('_V1_')[0] + "_V1_.jpg"
+            
+    return render(request, 'recommender/watchlist.html', {'movies': my_movies})
+
+@login_required
+def add_comment(request, movie_id):
+    if request.method == "POST":
+        movie = get_object_or_404(Movie, id=movie_id)
+        content = request.POST.get('content')
+        if content:
+            Comment.objects.create(user=request.user, movie=movie, content=content)
+    return redirect('movie_detail', movie_id=movie_id)
+
+@login_required
+def delete_comment(request, comment_id):
+    comment = get_object_or_404(Comment, id=comment_id, user=request.user)
+    movie_id = comment.movie.id
+    comment.delete()
+    return redirect('movie_detail', movie_id=movie_id)
