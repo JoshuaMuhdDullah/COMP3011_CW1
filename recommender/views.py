@@ -7,17 +7,27 @@ from sklearn.metrics.pairwise import linear_kernel
 
 # Create your views here.
 def get_similarity_matrix():
-    all_movies = Movie.objects.all().values('id', 'overview')
+    # Fetch data including director and rating
+    all_movies = Movie.objects.all().values('id', 'overview', 'director', 'imdb_rating')
     if not all_movies.exists():
         return None, None
         
     df = pd.DataFrame(list(all_movies))
     
-    tfidf = TfidfVectorizer(stop_words='english')
-    tfidf_matrix = tfidf.fit_transform(df['overview'])
+    # Clean director names (remove spaces so 'Christopher Nolan' becomes 'ChristopherNolan')
+    # This ensures the model treats the full name as a unique keyword
+    df['director_cleaned'] = df['director'].apply(lambda x: x.replace(" ", "") if x else "")
     
-    # Pre-compute the similarity scores
+    # Create the "Content Soup" (Overview + Director mentioned twice to give it more weight)
+    df['soup'] = df['overview'] + " " + df['director_cleaned'] + " " + df['director_cleaned']
+    
+    # TF-IDF on the soup
+    tfidf = TfidfVectorizer(stop_words='english')
+    tfidf_matrix = tfidf.fit_transform(df['soup'])
+    
+    # Calculate Base Similarity
     cosine_sim = linear_kernel(tfidf_matrix, tfidf_matrix)
+    
     return df, cosine_sim
 
 DF_MOVIES, COSINE_SIM = get_similarity_matrix()
@@ -51,6 +61,10 @@ def movie_search(request):
     if not query and not genre_filter:
         results = results.order_by('-imdb_rating')[:10]
 
+    for movie in results:
+        if movie.poster_link and "_V1_" in movie.poster_link:
+            movie.poster_link = movie.poster_link.split('_V1_')[0] + "_V1_.jpg"
+
     return render(request, 'recommender/search.html', {
         'results': results,
         'query': query,
@@ -60,41 +74,44 @@ def movie_search(request):
     })
 
 def movie_detail(request, movie_id):
-    # 1. Get current movie
+    # 1. Initialize variables at the top to prevent "Unbound" errors
     movie = Movie.objects.get(id=movie_id)
-    
-    # 2. Get all movies for comparison
-    all_movies = Movie.objects.all()
-    
-    # Create a DataFrame for processing
-    df = pd.DataFrame(list(all_movies.values('id', 'series_title', 'overview')))
-    
-    # 3. Setup TF-IDF
-    tfidf = TfidfVectorizer(stop_words='english')
-    tfidf_matrix = tfidf.fit_transform(df['overview'])
-    
-    # 4. Calculate Similarity
-    # This finds how similar every movie is to every other movie
-    cosine_sim = linear_kernel(tfidf_matrix, tfidf_matrix)
-    
-    # 5. Get the index of our current movie in the DataFrame
-    idx = df.index[df['id'] == movie.id].tolist()[0]
-    
-    # 6. Get scores for all movies compared to this one
-    sim_scores = list(enumerate(cosine_sim[idx]))
-    
-    # 7. Sort them by similarity score (highest first)
-    sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)
-    
-    # 8. Get the top 5 (skipping the first one because it's the movie itself)
-    sim_scores = sim_scores[1:6]
-    movie_indices = [i[0] for i in sim_scores]
-    
-    # 9. Get the actual Movie objects from the DB
-    recommended_ids = df['id'].iloc[movie_indices]
-    recommendations = Movie.objects.filter(id__in=recommended_ids)
+    recommendations = []
+    recommended_ids = [] # Default to empty
+
+    # 2. Try the Recommendation Logic
+    if DF_MOVIES is not None:
+        try:
+            # Get the index of the current movie
+            idx = DF_MOVIES.index[DF_MOVIES['id'] == movie.id].tolist()[0]
+            
+            # Calculate/Get similarity scores
+            sim_scores = list(enumerate(COSINE_SIM[idx]))
+            sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)
+            
+            # Get top 5 indices (skipping the first one which is the movie itself)
+            movie_indices = [i[0] for i in sim_scores[1:6]]
+            
+            # ASSIGN VALUE HERE
+            recommended_ids = DF_MOVIES['id'].iloc[movie_indices].values
+            
+            # Fetch actual objects from DB
+            recommendations = Movie.objects.filter(id__in=recommended_ids)
+            
+        except (IndexError, ValueError):
+            # If the movie isn't in our DF, recommendations stays empty
+            pass
+
+    # 3. Apply High-Res Fix to the main movie
+    if movie.poster_link and "_V1_" in movie.poster_link:
+        movie.poster_link = movie.poster_link.split('_V1_')[0] + "_V1_.jpg"
+
+    # 4. Apply High-Res Fix to recommendations (if any exist)
+    for rec in recommendations:
+        if rec.poster_link and "_V1_" in rec.poster_link:
+            rec.poster_link = rec.poster_link.split('_V1_')[0] + "_V1_.jpg"
 
     return render(request, 'recommender/detail.html', {
-        'movie': movie,
+        'movie': movie, 
         'recommendations': recommendations
     })
