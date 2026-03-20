@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #141414; color: white; }
+        .hero-section { background: linear-gradient(to bottom, rgba(20,20,20,0), #141414), url('{{ movie.poster_link }}'); background-size: cover; padding-top: 100px; }
+        .movie-poster { border-radius: 8px; box-shadow: 0 0 20px rgba(0,0,0,0.5); width: 100%; max-width: 300px; }
+        .rec-card img { height: 220px; object-fit: cover; border-radius: 4px; }
+        .rec-card { background: none; border: none; transition: 0.2s; }
+        .rec-card:hover { transform: translateY(-5px); }
+        .badge { background-color: #333; }
+    </style>
+</head>
+<body>
+
+<div class="container py-5">
+    <a href="{% url 'movie_search' %}" class="btn btn-outline-light mb-4">← Back to Search</a>
+    
+    <div class="row align-items-center">
+        <div class="col-md-4 text-center">
+            <img src="{{ movie.poster_link }}" class="movie-poster mb-4">
+        </div>
+        <div class="col-md-8">
+            <h1 class="display-4 fw-bold">{{ movie.series_title }} <span class="text-muted fw-light">({{ movie.released_year }})</span></h1>
+            <div class="mb-3">
+                <span class="badge rounded-pill p-2 px-3">⭐ {{ movie.imdb_rating }} IMDb</span>
+                <span class="ms-2 text-muted">{{ movie.runtime }}</span>
+                <span class="ms-2 text-muted">| {{ movie.genre }}</span>
+            </div>
+            <p class="lead">{{ movie.overview }}</p>
+            <hr class="border-secondary">
+            <p><strong>Director:</strong> {{ movie.director }}</p>
+            <p><strong>Cast:</strong> {{ movie.star1 }}, {{ movie.star2 }}, {{ movie.star3 }}, {{ movie.star4 }}</p>
+        </div>
+    </div>
+
+    <div class="mt-5">
+        <h3 class="mb-4">More Like This</h3>
+        <div class="row row-cols-2 row-cols-md-5 g-3">
+            {% for rec in recommendations %}
+            <div class="col text-center">
+                <a href="{% url 'movie_detail' rec.id %}" class="text-decoration-none text-white">
+                    <div class="card rec-card">
+                        <img src="{{ rec.poster_link }}" class="card-img-top">
+                        <div class="card-body p-2">
+                            <p class="small m-0 text-truncate">{{ rec.series_title }}</p>
+                        </div>
+                    </div>
+                </a>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+</body>
+</html>

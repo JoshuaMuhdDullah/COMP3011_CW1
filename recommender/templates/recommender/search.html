@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MovieRec | Discovery</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #141414; color: white; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .navbar { background-color: rgba(0,0,0,0.95); transition: background 0.3s; }
+        
+        /* Hero Styling */
+        .hero-section {
+            background: linear-gradient(rgba(0,0,0,0.6), #141414), 
+                        url('https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&w=1600&q=80');
+            background-size: cover;
+            background-position: center;
+            padding: 120px 0;
+            margin-top: -70px; /* Pulls it up behind the transparent-ish navbar */
+        }
+
+        /* Movie Card Styling */
+        .card { background-color: #1a1a1a; border: none; transition: all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1); height: 100%; border-radius: 8px; overflow: hidden; }
+        .card:hover { transform: scale(1.08); z-index: 10; cursor: pointer; box-shadow: 0 10px 20px rgba(0,0,0,0.6); }
+        .card-title { font-size: 0.95rem; color: #fff; font-weight: 600; margin-bottom: 0.5rem; }
+        .text-muted { color: #808080 !important; }
+        
+        img.card-img-top { height: 320px; object-fit: cover; }
+        
+        /* Custom Red Accent */
+        .text-danger { color: #e50914 !important; }
+        .btn-danger { background-color: #e50914; border: none; font-weight: bold; }
+        .btn-danger:hover { background-color: #b20710; }
+        
+        .search-container { max-width: 700px; margin: 0 auto; }
+    </style>
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg navbar-dark sticky-top">
+    <div class="container">
+        <a class="navbar-brand fw-bold text-danger fs-3" href="{% url 'movie_search' %}">MOVIEREC</a>
+        
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle text-white" href="#" id="genreDropdown" role="button" data-bs-toggle="dropdown">
+                        Browse by Genre
+                    </a>
+                    <ul class="dropdown-menu dropdown-menu-dark" style="max-height: 400px; overflow-y: auto;">
+                        <li><a class="dropdown-item" href="{% url 'movie_search' %}">All Genres</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        {% for genre in genres %}
+                            <li><a class="dropdown-item {% if genre == current_genre %}active{% endif %}" 
+                                   href="?genre={{ genre }}">{{ genre }}</a></li>
+                        {% endfor %}
+                    </ul>
+                </li>
+            </ul>
+            
+            <form class="d-flex" method="GET" action="{% url 'movie_search' %}">
+                <input class="form-control me-2 bg-dark text-white border-secondary" type="search" name="q" placeholder="Search..." value="{{ query|default:'' }}">
+                <button class="btn btn-outline-danger" type="submit">Search</button>
+            </form>
+        </div>
+    </div>
+</nav>
+
+{% if not query %}
+<header class="hero-section text-center">
+    <div class="container py-5">
+        <h1 class="display-2 fw-bold mb-3">Your Next <span class="text-danger">Favorite</span> Movie</h1>
+        <p class="lead mb-5 text-light opacity-75">Discover hidden gems and all-time classics from the IMDb Top 1,000 list.</p>
+        
+        <div class="search-container">
+            <form class="input-group input-group-lg shadow-lg" method="GET" action="{% url 'movie_search' %}">
+                <input type="text" name="q" class="form-control bg-dark text-white border-0" placeholder="Search titles, directors, or genres...">
+                <button class="btn btn-danger px-5" type="submit">Explore</button>
+            </form>
+            <div class="mt-3 text-muted small">Try "Sci-Fi", "Christopher Nolan", or "The Godfather"</div>
+        </div>
+    </div>
+</header>
+{% endif %}
+
+<main class="container py-5">
+    <h3 class="mb-4 fw-bold">
+        {% if query %}
+            Results for <span class="text-danger">"{{ query }}"</span>
+        {% else %}
+            Popular Recommendations
+        {% endif %}
+    </h3>
+
+    <div class="row row-cols-2 row-cols-md-3 row-cols-lg-5 g-4">
+        {% for movie in results %}
+        <div class="col">
+            <div class="card shadow-sm" onclick="location.href='{% url 'movie_detail' movie.id %}'">
+                <img src="{{ movie.poster_link }}" class="card-img-top" alt="{{ movie.series_title }}" 
+                     onerror="this.src='https://via.placeholder.com/300x450?text=No+Poster'">
+                <div class="card-body">
+                    <h5 class="card-title text-truncate">{{ movie.series_title }}</h5>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <small class="text-warning fw-bold">⭐ {{ movie.imdb_rating }}</small>
+                        <small class="text-muted">{{ movie.released_year }}</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% empty %}
+            <div class="col-12 text-center py-5">
+                <p class="text-muted fs-4">We couldn't find any matches for that search.</p>
+                <a href="{% url 'movie_search' %}" class="btn btn-outline-danger">Show All Movies</a>
+            </div>
+        {% endfor %}
+    </div>
+</main>
+
+<footer class="container py-5 mt-5 border-top border-secondary text-center text-muted">
+    <p>&copy; 2026 MovieRec AI Engine. Powered by Django & Machine Learning.</p>
+</footer>
+
+</body>
+</html>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
