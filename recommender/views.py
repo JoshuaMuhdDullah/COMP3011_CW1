@@ -6,8 +6,9 @@ from django.shortcuts import get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from .models import Movie, Comment
 import pandas as pd
+import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import linear_kernel
+from sklearn.metrics.pairwise import linear_kernel, cosine_similarity
 
 # Create your views here.
 def register_view(request):
@@ -15,7 +16,7 @@ def register_view(request):
         form = UserCreationForm(request.POST)
         if form.is_valid():
             user = form.save()
-            login(request, user) # Automatically log them in after registering
+            login(request, user)
             return redirect('movie_search')
     else:
         form = UserCreationForm()
@@ -61,6 +62,61 @@ def get_similarity_matrix():
     return df, cosine_sim
 
 DF_MOVIES, COSINE_SIM = get_similarity_matrix()
+
+def get_personal_recs(user_watchlist):
+    # 1. Fetch data from DB and convert to DataFrame
+    # We include 'series_title' to ensure we can identify the movies
+    all_movies = Movie.objects.all().values('id', 'series_title', 'overview', 'director')
+    if not all_movies.exists():
+        return []
+    
+    df_all = pd.DataFrame(list(all_movies))
+    
+    # 2. Identify what the user already has (by ID and Title)
+    watchlisted_ids = [m.id for m in user_watchlist]
+    watchlisted_titles = [m.series_title for m in user_watchlist]
+    
+    # 3. Create the "Content Soup" 
+    # Combining Director and Overview gives the AI more 'context' to match
+    df_all['soup'] = df_all['director'].fillna('') + ' ' + df_all['overview'].fillna('')
+    
+    # 4. Vectorize the library
+    tfidf = TfidfVectorizer(stop_words='english')
+    tfidf_matrix = tfidf.fit_transform(df_all['soup'])
+    
+    # 5. Find the 'Taste Profile' 
+    # We find the rows in our matrix that correspond to the user's watchlist
+    user_indices = df_all[df_all['id'].isin(watchlisted_ids)].index.tolist()
+    
+    if not user_indices:
+        return []
+
+    # Calculate the average vector of all movies the user likes
+    user_profile_vector = np.asarray(tfidf_matrix[user_indices].mean(axis=0))
+    
+    # 6. Compute Similarity
+    sim_scores = cosine_similarity(user_profile_vector, tfidf_matrix).flatten()
+    
+    # 7. Filter and Return the Top 5
+    related_indices = sim_scores.argsort()[::-1]
+    
+    recommendations = []
+    for i in related_indices:
+        title = df_all.iloc[i]['series_title']
+        
+        # Don't suggest movies they've already bookmarked
+        if title not in watchlisted_titles:
+            movie_obj = Movie.objects.filter(series_title=title).first()
+            if movie_obj:
+                # Apply High-Res Poster Fix
+                if movie_obj.poster_link and "_V1_" in movie_obj.poster_link:
+                    movie_obj.poster_link = movie_obj.poster_link.split('_V1_')[0] + "_V1_.jpg"
+                recommendations.append(movie_obj)
+        
+        if len(recommendations) >= 5:
+            break
+            
+    return recommendations
 
 def movie_search(request):
     query = request.GET.get('q')
@@ -180,15 +236,20 @@ def toggle_bookmark(request, movie_id):
 
 @login_required
 def watchlist_view(request):
-    # Fetch only the movies this user has added
     my_movies = request.user.watchlist.all()
     
-    # Apply our High-Res fix so the watchlist looks great
+    # Apply High-Res Fix for current watchlist
     for m in my_movies:
         if m.poster_link and "_V1_" in m.poster_link:
             m.poster_link = m.poster_link.split('_V1_')[0] + "_V1_.jpg"
-            
-    return render(request, 'recommender/watchlist.html', {'movies': my_movies})
+
+    # Call our new procedure
+    recommendations = get_personal_recs(my_movies) if my_movies.exists() else []
+
+    return render(request, 'recommender/watchlist.html', {
+        'movies': my_movies,
+        'recommendations': recommendations
+    })
 
 @login_required
 def add_comment(request, movie_id):
@@ -205,3 +266,4 @@ def delete_comment(request, comment_id):
     movie_id = comment.movie.id
     comment.delete()
     return redirect('movie_detail', movie_id=movie_id)
+

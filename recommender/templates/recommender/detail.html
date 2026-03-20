@@ -11,6 +11,7 @@
         .rec-card { background: none; border: none; transition: 0.2s; }
         .rec-card:hover { transform: translateY(-5px); }
         .badge { background-color: #333; }
+        .text-muted { color: #b3b3b3 !important; }
     </style>
 </head>
 <body>
@@ -57,7 +58,7 @@
                     <div class="card rec-card">
                         <img src="{{ rec.poster_link }}" class="card-img-top">
                         <div class="card-body p-2">
-                            <p class="small m-0 text-truncate">{{ rec.series_title }}</p>
+                            <p class="text-muted">{{ rec.series_title }}</p>
                         </div>
                     </div>
                 </a>
