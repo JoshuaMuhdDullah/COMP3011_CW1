@@ -31,7 +31,7 @@ The app will now be accessible at http://127.0.0.1:8000/
 
 Running the MCP server
 python manage.py run_mcp
-Tools Exposed: search_movie, get_recommendations.
+Tools Exposed: ```search_movie, get_recommendations.```
 
 ### API Documentation
 Can be accessed from: [here](API_Documentation.pdf)
